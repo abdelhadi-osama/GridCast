@@ -5,7 +5,7 @@ build/
 dist/
 wheels/
 *.egg-info
-*.pdf
+
 
 # Virtual environments
 .venv
@@ -13,6 +13,7 @@ wheels/
 # Datasets
 ML_solution_test/data_iso/
 data_iso/
+ml_solution_test/*.pdf
 
 # Models and related
 ML_solution_test/models_iso/
@@ -20,3 +21,6 @@ ML_solution_test/catboost_info/
 models_iso/
 catboost_info/
 *model_card*
+
+# Documents
+*.pdf
