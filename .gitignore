@@ -1,0 +1,21 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Datasets
+ML_solution_test/data_iso/
+data_iso/
+
+# Models and related
+ML_solution_test/models_iso/
+ML_solution_test/catboost_info/
+models_iso/
+catboost_info/
+*model_card*
