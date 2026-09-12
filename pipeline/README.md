@@ -65,8 +65,7 @@ Run the full pipeline (Data Acquisition → Preprocessing → Training → Evalu
 ```bash
 python main.py
 ```
-### prefect ui 
-→ prefect ui :
+### Prefect UI
 ```bash
 prefect server start
 ```
