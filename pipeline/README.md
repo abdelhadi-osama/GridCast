@@ -1,16 +1,12 @@
-
-
-***
-
-```markdown
 # ⚡ GridCast: ISO-NE Energy Demand Forecasting Pipeline
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue?logo=python&logoColor=white)](https://www.python.org/)
 [![MLflow](https://img.shields.io/badge/Tracked%20with-MLflow-blue?logo=mlflow)](https://mlflow.org/)
 [![Prefect](https://img.shields.io/badge/Orchestrated%20with-Prefect-ff4c4c?logo=prefect)](https://www.prefect.io/)
 [![XGBoost](https://img.shields.io/badge/Model-XGBoost-orange?logo=xgboost)](https://xgboost.ai/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A production-ready, modular MLOps pipeline for forecasting hourly electricity demand in the ISO New England (ISO-NE) grid. Because large-scale energy storage is difficult, grid operators must predict hourly power demand precisely to match generation and prevent blackouts. 
+A production-ready, modular MLOps pipeline for forecasting hourly electricity demand in the ISO New England (ISO-NE) grid. Because large-scale energy storage is difficult, grid operators must predict hourly power demand precisely to match generation and prevent blackouts.
 
 This pipeline focuses on **strict chronological data handling**, **thermodynamic feature engineering**, and **automated model benchmarking** to deliver highly accurate, drift-resistant forecasting models.
 
@@ -62,7 +58,7 @@ pipeline/
 
 ## 🚀 How to Run the Pipeline
 
-The pipeline is controlled via a clean Command Line Interface (CLI) using `main.py`. 
+The pipeline is controlled via a clean Command Line Interface (CLI) using `main.py`.
 
 ### Basic Usage
 Run the full pipeline (Data Acquisition → Preprocessing → Training → Evaluation):
@@ -95,7 +91,7 @@ When you run `python main.py`, the pipeline executes the following stages sequen
 
 ## 📊 Experiment Tracking (MLflow)
 
-All experiments, hyperparameters, and model artifacts are automatically tracked using MLflow. 
+All experiments, hyperparameters, and model artifacts are automatically tracked using MLflow.
 
 To view the MLflow UI and compare your models (e.g., XGBoost vs. CatBoost):
 ```bash
@@ -116,16 +112,6 @@ Then, open your browser and navigate to `http://localhost:5000`.
 
 ## 📄 License
 
+This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+
 This project is developed for educational and research purposes in advanced MLOps practices.
-```
-
-***
-
-### How to use this:
-1. Open your terminal.
-2. Navigate to the pipeline folder: `cd ~/GridCast/pipeline`
-3. Create or open the README file: `nano README.md` (or use VS Code: `code README.md`).
-4. Paste the Markdown content above.
-5. Save and push to GitHub!
-
-Let me know if you want to tweak any sections or if you are ready to move on to writing the `data_preprocessing.py` file!
