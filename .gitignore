@@ -24,3 +24,85 @@ catboost_info/
 
 # Documents
 *.pdf
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# ---------- Virtual environments ----------
+.venv/
+venv/
+env/
+ENV/
+
+# ---------- Caches / testing ----------
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ---------- Jupyter ----------
+.ipynb_checkpoints/
+# If you want to ignore all notebooks, uncomment:
+# *.ipynb
+
+# ---------- OS / IDE ----------
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# ---------- Secrets ----------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ---------- MLflow ----------
+mlruns/
+mlflow_gridcast.db
+pipeline/mlruns/
+pipeline/mlflow_gridcast.db
+
+# ---------- CatBoost ----------
+catboost_info/
+pipeline/catboost_info/
+
+# ---------- Data ----------
+pipeline/data_iso/raw/
+pipeline/data_iso/preprocessed/
+
+# If you want to keep the empty folders in Git, add .gitkeep files
+# and use these exceptions:
+# !pipeline/data_iso/raw/.gitkeep
+# !pipeline/data_iso/preprocessed/.gitkeep
+
+# ---------- Model artifacts / binaries ----------
+*.pkl
+*.joblib
+*.skops
+*.cbm
+*.model
+*.h5
+*.pt
+*.pth
+*.onnx
+
+# Only root-level or pipeline-level model folders, so src/models is safe
+/models/
+pipeline/models/
+
+# ---------- Logs / outputs ----------
+*.log
+logs/
+outputs/
+pipeline/outputs/
