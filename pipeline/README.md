@@ -65,6 +65,11 @@ Run the full pipeline (Data Acquisition → Preprocessing → Training → Evalu
 ```bash
 python main.py
 ```
+### prefect ui 
+→ prefect ui :
+```bash
+prefect server start
+```
 
 ### Advanced Options
 | Command | Description |
@@ -97,6 +102,10 @@ To view the MLflow UI and compare your models (e.g., XGBoost vs. CatBoost):
 ```bash
 # Make sure you are in the ~/GridCast/pipeline directory
 mlflow ui --port 5000
+```
+```bash
+# Make sure you are in the ~/GridCast/pipeline directory
+mlflow ui --backend-store-uri sqlite:///mlflow_gridcast.db --host 127.0.0.1 --port 5000
 ```
 Then, open your browser and navigate to `http://localhost:5000`.
 
