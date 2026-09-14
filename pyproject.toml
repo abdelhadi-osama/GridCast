@@ -22,3 +22,6 @@ dependencies = [
     "xgboost>=3.4.1",
     "xlrd>=2.0.2",
 ]
+[tool.setuptools.packages.find]
+include = ["shared*", "pipeline*"]
+exclude = ["ML_solution_test*", "tests*", "*.tests*"]
