@@ -106,3 +106,12 @@ pipeline/models/
 logs/
 outputs/
 pipeline/outputs/
+
+
+# ---------- Offline inference ----------
+offline/forecasts/
+offline/reports/
+offline/batch_results.db
+
+# ---------- Prefect ----------
+.prefect/

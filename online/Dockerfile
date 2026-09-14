@@ -7,7 +7,6 @@ RUN pip install uv
 WORKDIR /app
 
 COPY shared/ ./shared/
-# Inject the FastAPI serving logic
 COPY online/ ./online/
 
 # Shift execution context to the API directory
