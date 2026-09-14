@@ -1,0 +1,144 @@
+services:
+
+  # ============================================================
+  # MLflow tracking server / model registry
+  # ============================================================
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:latest
+    container_name: gridcast-mlflow
+
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 1010
+      --backend-store-uri sqlite:////mlflow/mlflow.db
+      --default-artifact-root mlflow-artifacts:/
+      --artifacts-destination /mlruns
+      --serve-artifacts
+      --uvicorn-opts "--forwarded-allow-ips=*"
+      --allowed-hosts "*"
+
+    ports:
+      - "127.0.0.1:1010:1010"
+
+    volumes:
+      - ./mlflow:/mlflow
+      - ./mlruns:/mlruns
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:1010/health')"
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+    restart: unless-stopped
+
+
+  # ============================================================
+  # Online inference API
+  # ============================================================
+  online:
+    build:
+      context: .
+      dockerfile: online/Dockerfile
+
+    container_name: gridcast-online
+
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:1010
+
+    depends_on:
+      mlflow:
+        condition: service_healthy
+
+    ports:
+      - "1011:1011"
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:1011/health')"
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+    restart: unless-stopped
+
+
+  # ============================================================
+  # Offline forecasting API
+  # ============================================================
+  offline:
+    build:
+      context: .
+      dockerfile: offline/Dockerfile
+
+    container_name: gridcast-offline
+
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:1010
+      GRIDCAST_OFFLINE_DATA_DIR: /app/offline/data
+
+    volumes:
+      - ./offline_data:/app/offline/data
+
+    depends_on:
+      mlflow:
+        condition: service_healthy
+
+    ports:
+      - "1012:1012"
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:1012/health')"
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+    restart: unless-stopped
+
+
+  # ============================================================
+  # Streamlit dashboard
+  # ============================================================
+  dashboard:
+    build:
+      context: .
+      dockerfile: dashboard/Dockerfile
+
+    container_name: gridcast-dashboard
+
+    environment:
+      ONLINE_API_URL: http://online:1011
+      OFFLINE_API_URL: http://offline:1012
+
+    depends_on:
+      online:
+        condition: service_healthy
+
+      offline:
+        condition: service_healthy
+
+    ports:
+      - "1013:1013"
+
+    restart: unless-stopped

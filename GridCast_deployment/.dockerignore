@@ -1,0 +1,38 @@
+# Git
+.git/
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Test / lint caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local secrets
+.env
+*.env
+
+# Logs
+*.log
+
+# Existing generated runtime state
+offline/forecasts/
+offline/reports/
+offline/mlruns/
+offline/batch_results.db
+
+# Local MLflow state accidentally copied from development
+online/mlruns/
+shared/mlruns/
+
+# OS files
+.DS_Store
