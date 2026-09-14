@@ -1,5 +1,10 @@
 # ⚡ GridCast Dashboard
 
+[![FastAPI](https://img.shields.io/badge/FastAPI-005571?logo=fastapi)](https://fastapi.tiangolo.com/)
+[![Swagger UI](https://img.shields.io/badge/API%20Docs-Swagger%20UI-85EA2D?logo=swagger&logoColor=black)](https://swagger.io/tools/swagger-ui/)
+[![Docker](https://img.shields.io/badge/Container-Docker-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
+[![MLflow](https://img.shields.io/badge/Model%20Registry-MLflow-blue?logo=mlflow)](https://mlflow.org/)
+
 A Streamlit-based user interface for the GridCast electricity-demand forecasting system.
 
 The dashboard is the presentation layer of GridCast. It does **not** load models directly, read SQLite directly, or open Parquet files from the filesystem. Instead, it communicates with the GridCast APIs over HTTP:
