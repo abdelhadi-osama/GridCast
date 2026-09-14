@@ -510,6 +510,51 @@ def download_report(
         filename=report_path.name,
     )
 
+# =============================================================================
+# parquet
+# =============================================================================
+@app.get(
+    "/forecasts/{forecast_id}/parquet"
+)
+def download_forecast_parquet(
+    forecast_id: str,
+):
+    """
+    Download the persisted hourly forecast
+    as a Parquet file.
+    """
+
+    result = get_forecast_run(
+        forecast_id
+    )
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"Unknown forecast_id: "
+                f"{forecast_id}"
+            ),
+        )
+
+    forecast_path = Path(
+        result["forecast_path"]
+    )
+
+    if not forecast_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "Stored Parquet forecast "
+                "artifact does not exist."
+            ),
+        )
+
+    return FileResponse(
+        path=forecast_path,
+        media_type="application/vnd.apache.parquet",
+        filename=forecast_path.name,
+    )
 
 # =============================================================================
 # RUNNING / FAILED JOBS
