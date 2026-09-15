@@ -59,7 +59,7 @@ services:
         condition: service_healthy
 
     ports:
-      - "1011:1011"
+      - "127.0.0.1:1011:1011"
 
     healthcheck:
       test:
@@ -99,7 +99,7 @@ services:
         condition: service_healthy
 
     ports:
-      - "1012:1012"
+      - "127.0.0.1:1012:1012"
 
     healthcheck:
       test:
@@ -139,6 +139,6 @@ services:
         condition: service_healthy
 
     ports:
-      - "1013:1013"
+       - "127.0.0.1:1013:1013"
 
     restart: unless-stopped
