@@ -56,7 +56,10 @@ Docker Compose is installed
 Git is installed
 required ports are available
 basic VPS networking/firewall configuration is already done
+
 ```
+for more info look here : > - Contabo VPS initial configuration: [vps-initial-configurations](https://github.com/context-community/vps-initial-configurations)
+
 
 GridCast uses:
 
@@ -1201,3 +1204,609 @@ containers restart cleanly
 ```
 
 This is the baseline VPS deployment before adding later production infrastructure such as Nginx, TLS, CI/CD, Prometheus, or Grafana.
+
+
+
+# Nginx Reverse Proxy and HTTPS for GridCast
+
+This section documents only the Nginx and HTTPS configuration used for the GridCast VPS deployment.
+
+The application was already running successfully with Docker Compose before Nginx was configured.
+
+The internal services were:
+
+```text
+MLflow      -> 127.0.0.1:1010
+Online API  -> 127.0.0.1:1011
+Offline API -> 127.0.0.1:1012
+Dashboard   -> 127.0.0.1:1013
+```
+
+The public domain used for the deployment was:
+
+```text
+gridcast.duckdns.org
+```
+
+The final public routing is:
+
+```text
+https://gridcast.duckdns.org/                 -> Streamlit Dashboard
+https://gridcast.duckdns.org/online/...       -> Online FastAPI service
+https://gridcast.duckdns.org/offline/...      -> Offline FastAPI service
+```
+
+MLflow is intentionally **not exposed through Nginx**. It remains private on `127.0.0.1:1010` and can be reached from the local development machine through an SSH tunnel when required.
+
+---
+
+## 1. Prerequisites
+
+
+- A VPS with Docker and Docker Compose installed
+- A domain name pointing to your VPS IP — use [DuckDNS](https://www.duckdns.org/domains) for a free subdomain if needed
+- Your project cloned on the VPS
+
+---
+Before configuring Nginx, verify that the Docker services are healthy on the VPS.
+
+Run on the **VPS**:
+
+```bash
+cd ~/GridCast/GridCast_deployment
+docker compose ps
+```
+
+Expected state:
+
+```text
+gridcast-mlflow      healthy
+gridcast-online      healthy
+gridcast-offline     healthy
+gridcast-dashboard   up
+```
+
+Verify the services directly from the VPS:
+
+```bash
+curl -s http://127.0.0.1:1010/health
+echo
+
+curl -s http://127.0.0.1:1011/health
+echo
+
+curl -s http://127.0.0.1:1012/health
+echo
+
+curl -s -o /dev/null -w "%{http_code}\n" \
+  http://127.0.0.1:1013
+```
+
+Expected output is similar to:
+
+```text
+OK
+{"status":"ok","model_version":"v8","model_alias":"champion"}
+{"status":"ok", ...}
+200
+```
+
+The exact model version can change.
+
+---
+
+## 2. Required FastAPI Reverse-Proxy Configuration
+
+Before Nginx is used, the FastAPI applications must know their public URL prefixes.
+
+GridCast uses:
+
+```text
+Online API  -> /online
+Offline API -> /offline
+```
+
+In both FastAPI applications, add:
+
+```python
+root_path=os.getenv("ROOT_PATH", "")
+```
+
+The Docker Compose configuration provides:
+
+```yaml
+online:
+  environment:
+    MLFLOW_TRACKING_URI: http://mlflow:1010
+    ROOT_PATH: /online
+
+offline:
+  environment:
+    MLFLOW_TRACKING_URI: http://mlflow:1010
+    GRIDCAST_OFFLINE_DATA_DIR: /app/offline/data
+    ROOT_PATH: /offline
+```
+
+The Dashboard continues using Docker-internal API addresses:
+
+```yaml
+dashboard:
+  environment:
+    ONLINE_API_URL: http://online:1011
+    OFFLINE_API_URL: http://offline:1012
+```
+
+The Dashboard does not need to call the public domain because the Streamlit process communicates with the APIs inside the Docker network.
+
+---
+
+## 3. Bind Application Ports to Localhost
+
+Before exposing the system through Nginx, bind the application ports only to the VPS loopback interface.
+
+The Compose port mappings should be:
+
+```yaml
+mlflow:
+  ports:
+    - "127.0.0.1:1010:1010"
+
+online:
+  ports:
+    - "127.0.0.1:1011:1011"
+
+offline:
+  ports:
+    - "127.0.0.1:1012:1012"
+
+dashboard:
+  ports:
+    - "127.0.0.1:1013:1013"
+```
+
+This prevents direct public access to ports `1010` through `1013`.
+
+The intended architecture becomes:
+
+```text
+Internet
+   |
+   | 80 / 443
+   v
+ Nginx
+   |
+   +----> 127.0.0.1:1013  Dashboard
+   +----> 127.0.0.1:1011  Online API
+   +----> 127.0.0.1:1012  Offline API
+
+MLflow
+   |
+   +----> 127.0.0.1:1010  private / SSH tunnel only
+```
+
+After changing Compose, apply it:
+
+```bash
+cd ~/GridCast/GridCast_deployment
+docker compose up -d --build
+```
+
+Then verify:
+
+```bash
+docker compose ps
+```
+
+The port mappings should show:
+
+```text
+127.0.0.1:1010->1010/tcp
+127.0.0.1:1011->1011/tcp
+127.0.0.1:1012->1012/tcp
+127.0.0.1:1013->1013/tcp
+```
+
+---
+
+## 4. Install or Verify Nginx
+
+Run on the **VPS**:
+
+```bash
+sudo apt update
+sudo apt install -y nginx
+```
+
+In this deployment, Nginx was already installed.
+
+Verify the service:
+
+```bash
+sudo systemctl status nginx --no-pager
+```
+
+Expected:
+
+```text
+Active: active (running)
+```
+
+On some systems `/usr/sbin` is not in the normal user's `PATH`, so `nginx -v` may return `command not found` even though Nginx is installed and running.
+
+Use:
+
+```bash
+sudo /usr/sbin/nginx -v
+```
+
+or:
+
+```bash
+sudo nginx -v
+```
+
+when required.
+
+---
+
+## 5. Create the GridCast Nginx Configuration
+
+Create a dedicated Nginx site configuration:
+
+```bash
+sudo nano /etc/nginx/sites-available/gridcast
+```
+
+Use:
+
+```nginx
+server {
+    listen 80;
+    listen [::]:80;
+
+    server_name gridcast.duckdns.org; #or your domain 
+
+    # Online API
+    location = /online {
+        return 308 /online/;
+    }
+
+    location /online/ {
+        proxy_pass http://127.0.0.1:1011/;
+        proxy_http_version 1.1;
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Offline API
+    location = /offline {
+        return 308 /offline/;
+    }
+
+    location /offline/ {
+        proxy_pass http://127.0.0.1:1012/;
+        proxy_http_version 1.1;
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Streamlit Dashboard
+    location / {
+        proxy_pass http://127.0.0.1:1013;
+        proxy_http_version 1.1;
+
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_read_timeout 86400;
+    }
+}
+```
+
+### Why the trailing slash on `proxy_pass` matters
+
+For example:
+
+```nginx
+location /online/ {
+    proxy_pass http://127.0.0.1:1011/;
+}
+```
+
+means:
+
+```text
+Public request:       /online/health
+Forwarded internally: /health
+```
+
+The FastAPI application still knows that its public prefix is `/online` because `ROOT_PATH=/online`.
+
+The same logic applies to `/offline/`.
+
+---
+
+## 6. Enable the Nginx Site
+
+Create the symbolic link:
+
+```bash
+sudo ln -s \
+  /etc/nginx/sites-available/gridcast \
+  /etc/nginx/sites-enabled/gridcast
+```
+
+If the link already exists, do not create another one.
+
+Validate the complete Nginx configuration:
+
+```bash
+sudo nginx -t
+```
+
+Expected:
+
+```text
+nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
+nginx: configuration file /etc/nginx/nginx.conf test is successful
+```
+
+If validation succeeds, reload Nginx:
+
+```bash
+sudo systemctl reload nginx
+```
+
+Always run `nginx -t` before reloading after configuration changes.
+
+---
+
+## 7. Test the HTTP Reverse Proxy
+
+Test the Online API:
+
+```bash
+curl -i http://gridcast.duckdns.org/online/health
+```
+
+Expected:
+
+```text
+HTTP/1.1 200 OK
+```
+
+with JSON similar to:
+
+```json
+{
+  "status": "ok",
+  "model_version": "v8",
+  "model_alias": "champion"
+}
+```
+
+Test the Offline API:
+
+```bash
+curl -i http://gridcast.duckdns.org/offline/health
+```
+
+Expected:
+
+```text
+HTTP/1.1 200 OK
+```
+
+Test the Dashboard:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" \
+  http://gridcast.duckdns.org/
+```
+
+Expected:
+
+```text
+200
+```
+
+At this point the reverse proxy is working over HTTP.
+
+---
+
+## 8. Add HTTPS with Certbot
+
+Install Certbot and the Nginx integration:
+
+```bash
+sudo apt update
+sudo apt install -y certbot python3-certbot-nginx
+```
+
+Request a certificate for the GridCast domain:
+
+```bash
+sudo certbot --nginx -d gridcast.duckdns.org
+```
+
+A successful deployment reports something similar to:
+
+```text
+Successfully received certificate.
+Successfully deployed certificate for gridcast.duckdns.org
+Congratulations! You have successfully enabled HTTPS
+```
+
+Certbot stores the certificate under:
+
+```text
+/etc/letsencrypt/live/gridcast.duckdns.org/
+```
+
+and configures automatic renewal.
+
+For this deployment, the certificate was successfully installed and HTTPS became available at:
+
+```text
+https://gridcast.duckdns.org
+```
+
+---
+
+## 9. Verify HTTPS
+
+Test the Dashboard:
+
+```bash
+curl -I https://gridcast.duckdns.org/
+```
+
+Expected:
+
+```text
+HTTP/1.1 200 OK
+```
+
+Test Online:
+
+```bash
+curl -i https://gridcast.duckdns.org/online/health
+```
+
+Expected:
+
+```text
+HTTP/1.1 200 OK
+```
+
+with JSON similar to:
+
+```json
+{
+  "status": "ok",
+  "model_version": "v8",
+  "model_alias": "champion"
+}
+```
+
+Test Offline:
+
+```bash
+curl -i https://gridcast.duckdns.org/offline/health
+```
+
+Expected:
+
+```text
+HTTP/1.1 200 OK
+```
+
+If all three succeed, HTTPS is working correctly.
+
+---
+
+## 10. Verify the HTTP-to-HTTPS Redirect Method
+
+GridCast exposes POST endpoints such as:
+
+```text
+POST /online/predict
+POST /offline/forecast
+```
+
+A redirect should preserve the HTTP method.
+
+Check the redirect generated by Certbot:
+
+```bash
+sudo grep -R "return 30" /etc/nginx/sites-enabled/gridcast
+```
+
+If the HTTP-to-HTTPS redirect uses:
+
+```nginx
+return 301 https://$host$request_uri;
+```
+
+change it to:
+
+```nginx
+return 308 https://$host$request_uri;
+```
+
+Then validate and reload:
+
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+`308 Permanent Redirect` preserves the original HTTP method and request body, which is safer for API POST requests.
+
+---
+
+## 11. Final Public URL Map
+
+| Public URL | Service |
+|---|---|
+| `https://gridcast.duckdns.org/` | Streamlit Dashboard |
+| `https://gridcast.duckdns.org/online/health` | Online API health |
+| `https://gridcast.duckdns.org/online/predict` | Online prediction |
+| `https://gridcast.duckdns.org/online/docs` | Online Swagger UI |
+| `https://gridcast.duckdns.org/offline/health` | Offline API health |
+| `https://gridcast.duckdns.org/offline/forecast` | Trigger offline forecast |
+| `https://gridcast.duckdns.org/offline/docs` | Offline Swagger UI |
+
+MLflow is intentionally omitted from the public URL map. It remains private on `127.0.0.1:1010` or through the SSH tunnel from the development machine.
+
+---
+
+## 12. Final Nginx Architecture
+
+```text
+                         Internet
+                            |
+                         HTTPS :443
+                            |
+                            v
+                          Nginx
+                            |
+             +--------------+--------------+
+             |              |              |
+             v              v              v
+             /          /online/       /offline/
+             |              |              |
+             v              v              v
+        Dashboard        Online         Offline
+        :1013            :1011          :1012
+                            \              /
+                             \            /
+                              v          v
+                                MLflow
+                                :1010
+                               private
+```
+
+The Nginx deployment is complete when:
+
+```text
+Nginx configuration passes nginx -t
+Dashboard returns HTTP 200
+Online health returns HTTP 200
+Offline health returns HTTP 200
+HTTPS certificate is valid
+HTTP redirects to HTTPS
+Online and Offline APIs work through their public prefixes
+MLflow remains private
+```
