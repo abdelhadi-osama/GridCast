@@ -130,6 +130,7 @@ app = FastAPI(
     version="1.0.0",
 
     lifespan=lifespan,
+     root_path=os.getenv("ROOT_PATH", ""),
 )
 
 

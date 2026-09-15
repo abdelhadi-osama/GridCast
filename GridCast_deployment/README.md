@@ -1,0 +1,1203 @@
+# GridCast VPS Deployment Guide
+
+This README documents the VPS deployment of GridCast step by step.
+
+## Deployment logic
+
+The goal is to reproduce on the VPS the same Dockerized architecture that was already validated locally.
+
+```text
+Local development machine
+        |
+        | git push
+        v
+      GitHub
+        |
+        | git clone / git pull
+        v
+       VPS
+        |
+        +--> MLflow
+        +--> Online API
+        +--> Offline API
+        +--> Dashboard
+```
+
+The training pipeline remains on the local development machine. The VPS runs the deployment services.
+
+Later, local training will communicate with the MLflow server on the VPS through an SSH tunnel.
+
+```text
+Local training machine
+        |
+        | SSH tunnel
+        | MLFLOW_TRACKING_URI=http://127.0.0.1:1010
+        v
+       VPS
+        |
+        +--> MLflow :1010
+        +--> Online API :1011
+        +--> Offline API :1012
+        +--> Dashboard :1013
+```
+
+---
+
+## Assumptions
+
+Before starting this guide, we assume that the VPS is already prepared.
+
+This means:
+
+```text
+SSH access works
+Docker is installed
+Docker Compose is installed
+Git is installed
+required ports are available
+basic VPS networking/firewall configuration is already done
+```
+
+GridCast uses:
+
+| Service | Port |
+|---|---:|
+| MLflow | 1010 |
+| Online API | 1011 |
+| Offline API | 1012 |
+| Dashboard | 1013 |
+
+This README focuses on deploying GridCast itself, not on provisioning the VPS.
+
+---
+
+# Step 1 — Configure SSH Access and Clone the Repository
+
+The first objective is:
+
+```text
+Local machine --> VPS
+VPS --> GitHub
+```
+
+These are two separate SSH relationships.
+
+## 1.1 Create an SSH key on the local machine
+
+Run on the **local machine**:
+
+```bash
+ssh-keygen -t ed25519 -C "your_email_or_label"
+```
+
+Accept the default location:
+
+```text
+~/.ssh/id_ed25519
+```
+
+This creates:
+
+```text
+~/.ssh/id_ed25519
+~/.ssh/id_ed25519.pub
+```
+
+Important:
+
+```text
+id_ed25519      = private key
+id_ed25519.pub  = public key
+```
+
+Never share the private key.
+
+## 1.2 Copy the local public key
+
+Run on the **local machine**:
+
+```bash
+cat ~/.ssh/id_ed25519.pub
+```
+
+Copy the complete line.
+
+## 1.3 Add the local public key to the VPS
+
+Connect to the VPS:
+
+```bash
+ssh <VPS_USER>@<VPS_IP>
+```
+
+On the **VPS**:
+
+```bash
+nano ~/.ssh/authorized_keys
+```
+
+Paste the local public key.
+
+Then set permissions:
+
+```bash
+chmod 700 ~/.ssh
+chmod 600 ~/.ssh/authorized_keys
+```
+
+Disconnect:
+
+```bash
+exit
+```
+
+Test again from the local machine:
+
+```bash
+ssh <VPS_USER>@<VPS_IP>
+```
+
+Expected result: the SSH connection succeeds using the key.
+
+## 1.4 Create an SSH key on the VPS for GitHub
+
+Connect to the VPS:
+
+```bash
+ssh <VPS_USER>@<VPS_IP>
+```
+
+Run on the **VPS**:
+
+```bash
+ssh-keygen -t ed25519 -C "gridcast-vps"
+```
+
+Display the VPS public key:
+
+```bash
+cat ~/.ssh/id_ed25519.pub
+```
+
+Copy the complete public key.
+
+This key is used for:
+
+```text
+VPS --> GitHub
+```
+
+## 1.5 Add the VPS key as a GitHub Deploy Key
+
+In the GridCast GitHub repository, go to:
+
+```text
+Settings
+-> Deploy keys
+-> Add deploy key
+```
+
+Use a name such as:
+
+```text
+GridCast VPS
+```
+
+Paste the VPS public key.
+
+For a deployment server that only needs `git clone` and `git pull`, read-only access is sufficient.
+
+Test GitHub access from the VPS:
+
+```bash
+ssh -T git@github.com
+```
+
+On the first connection, GitHub may ask whether you trust the host fingerprint. Type:
+
+```text
+yes
+```
+
+A successful response means GitHub recognizes the VPS SSH key.
+
+## 1.6 Clone the repository
+
+Run on the **VPS**:
+
+```bash
+cd ~
+git clone git@github.com:<GITHUB_USERNAME>/<REPOSITORY>.git
+```
+
+Example:
+
+```bash
+git clone git@github.com:username/GridCast.git
+```
+
+Then:
+
+```bash
+cd ~/GridCast
+git status
+```
+
+Expected result:
+
+```text
+On branch main
+nothing to commit, working tree clean
+```
+
+Verify the deployment directory exists:
+
+```bash
+ls
+```
+
+You should see:
+
+```text
+GridCast_deployment
+```
+
+Enter it:
+
+```bash
+cd ~/GridCast/GridCast_deployment
+```
+
+Verify:
+
+```bash
+ls -la
+```
+
+Expected deployment files include:
+
+```text
+docker-compose.yml
+.dockerignore
+online/
+offline/
+dashboard/
+shared/
+```
+
+---
+
+## Step 1 result
+
+At the end of this step:
+
+```text
+Local machine
+    |
+    | SSH key
+    v
+   VPS
+    |
+    | GitHub deploy key
+    v
+ GitHub
+```
+
+And the repository should exist on the VPS at:
+
+```text
+~/GridCast
+```
+
+with the deployment bundle at:
+
+```text
+~/GridCast/GridCast_deployment
+```
+
+Do not start the Docker services yet.
+
+The next step is to validate the deployment files on the VPS before starting MLflow.
+
+
+
+
+---
+
+# Step 2 — Validate the Deployment Bundle on the VPS
+
+Before starting any service, verify that the cloned deployment bundle is complete and that Docker Compose can parse it.
+
+## 2.1 Enter the deployment directory
+
+Run on the **VPS**:
+
+```bash
+cd ~/GridCast/GridCast_deployment
+```
+
+Verify the current path:
+
+```bash
+pwd
+```
+
+Expected:
+
+```text
+/home/<VPS_USER>/GridCast/GridCast_deployment
+```
+
+## 2.2 Check the deployment files
+
+Run:
+
+```bash
+ls -la
+```
+
+Expected files and directories include:
+
+```text
+docker-compose.yml
+.dockerignore
+online/
+offline/
+dashboard/
+shared/
+```
+
+The training pipeline is not required inside the deployment bundle.
+
+## 2.3 Validate Docker Compose
+
+Run:
+
+```bash
+docker compose config
+```
+
+This command parses `docker-compose.yml` and prints the resolved configuration.
+
+Expected services:
+
+```text
+mlflow
+online
+offline
+dashboard
+```
+
+There should be no YAML or Docker Compose syntax error.
+
+## Step 2 result
+
+At the end of this step, the repository is present on the VPS and the Compose configuration is valid.
+
+Do not start the whole system yet. Start MLflow first.
+
+---
+
+# Step 3 — Start MLflow on the VPS
+
+The Online and Offline services load the registered model from MLflow, so MLflow must be available first.
+
+The GridCast deployment uses:
+
+```text
+MLflow port: 1010
+```
+
+The host binding is intentionally:
+
+```text
+127.0.0.1:1010
+```
+
+This means MLflow is not exposed directly to the public internet.
+
+## 3.1 Start only MLflow
+
+Run on the **VPS**:
+
+```bash
+cd ~/GridCast/GridCast_deployment
+docker compose up -d mlflow
+```
+
+Expected output is similar to:
+
+```text
+Container gridcast-mlflow Started
+```
+
+## 3.2 Check MLflow status
+
+Run:
+
+```bash
+docker compose ps
+```
+
+Initially, the status may be:
+
+```text
+health: starting
+```
+
+After a short delay, it should become:
+
+```text
+healthy
+```
+
+Expected port mapping:
+
+```text
+127.0.0.1:1010->1010/tcp
+```
+
+## 3.3 Verify MLflow health on the VPS
+
+Run:
+
+```bash
+curl -i http://127.0.0.1:1010/health
+```
+
+Expected:
+
+```text
+HTTP/1.1 200 OK
+...
+OK
+```
+
+You can also inspect logs:
+
+```bash
+docker compose logs --tail=100 mlflow
+```
+
+A healthy MLflow service is required before continuing.
+
+---
+
+# Step 4 — Connect the Local Machine to MLflow on the VPS
+
+The training pipeline runs on the **local development machine**, but the MLflow registry runs on the **VPS**.
+
+We connect them using an SSH tunnel.
+
+The logic is:
+
+```text
+Local training process
+        |
+        | MLFLOW_TRACKING_URI
+        v
+127.0.0.1:<LOCAL_TUNNEL_PORT>
+        |
+        | SSH tunnel
+        v
+VPS 127.0.0.1:1010
+        |
+        v
+MLflow container
+```
+
+## Important note about `MLFLOW_TRACKING_URI` on the VPS
+
+The GridCast Docker services already receive their MLflow address through Docker Compose:
+
+```text
+http://mlflow:1010
+```
+
+Therefore, running this in the VPS shell:
+
+```bash
+export MLFLOW_TRACKING_URI=http://localhost:1010
+```
+
+is not required for the already running containers.
+
+The important tracking URI for training is set on the **local training machine** after the SSH tunnel is open.
+
+## 4.1 Open the SSH tunnel from the local machine
+
+Use a new terminal on your **local machine**.
+
+Recommended command:
+
+```bash
+ssh -N -L <mlflow_port>:localhost:<mlflow_port> user@<server_ip_address>
+```
+
+Example:
+
+```bash
+ssh -N -L 5010:127.0.0.1:1010 abdelhadi@35.202.67.240
+```
+
+Explanation:
+
+```text
+-N
+    Do not open a remote shell.
+    Create only the SSH tunnel.
+
+5010
+    Local port on the development machine.
+
+127.0.0.1:1010
+    MLflow address on the VPS.
+```
+
+The terminal will appear idle after authentication.
+
+That is expected.
+
+Leave this terminal open while training.
+
+### Why use local port 5010?
+
+GridCast MLflow uses port `1010` on the VPS.
+
+On some Linux systems, binding local ports below `1024` can require elevated privileges.
+
+Using local port `5010` avoids that problem:
+
+```text
+Local 5010  --->  VPS 1010
+```
+
+If local port `1010` works on your machine, this is also valid:
+
+```bash
+ssh -N -L 1010:127.0.0.1:1010 <VPS_USER>@<VPS_IP>
+```
+
+In that case, use `1010` instead of `5010` in the following local commands.
+
+## 4.2 Verify the tunnel
+
+Open a **different local terminal**.
+
+Run:
+
+```bash
+curl -i http://127.0.0.1:1010/health
+```
+
+Expected:
+
+```text
+HTTP/1.1 200 OK
+...
+OK
+```
+
+You can also open the MLflow UI locally:
+
+```text
+http://127.0.0.1:1010
+```
+
+If the MLflow HTML page appears, the tunnel is working.
+
+## Step 4 result
+
+At this point:
+
+```text
+Local machine
+127.0.0.1:1010
+        |
+        | SSH tunnel
+        v
+VPS
+127.0.0.1:1010
+        |
+        v
+MLflow
+```
+
+The local training process can now communicate securely with the VPS MLflow server without exposing MLflow publicly.
+
+---
+
+# Step 5 — Train Locally Against the VPS MLflow Registry
+
+Now the training pipeline should run on the **local machine** while logging everything to MLflow on the VPS.
+
+This means that the following will be stored in the VPS MLflow instance:
+
+```text
+experiments
+training runs
+parameters
+metrics
+model artifacts
+preprocessor artifact
+registered model versions
+model aliases
+```
+
+## 5.1 Open the local GridCast environment
+
+Run in a **local terminal**, not on the VPS:
+
+```bash
+cd ~/GridCast
+source .venv/bin/activate
+```
+
+## 5.2 Set the local MLflow tracking URI
+
+If the SSH tunnel uses local port `5010`:
+
+```bash
+export MLFLOW_TRACKING_URI=http://127.0.0.1:1010
+```
+
+Verify:
+
+```bash
+echo $MLFLOW_TRACKING_URI
+```
+
+Expected:
+
+```text
+http://127.0.0.1:1010
+```
+
+Verify from Python:
+
+```bash
+python - <<'PY'
+import os
+import mlflow
+
+print("Environment URI:", os.getenv("MLFLOW_TRACKING_URI"))
+print("MLflow URI:", mlflow.get_tracking_uri())
+PY
+```
+
+Expected:
+
+```text
+Environment URI: http://127.0.0.1:1010
+MLflow URI: http://127.0.0.1:1010
+```
+
+## 5.3 Run the training pipeline
+
+Run locally:
+
+```bash
+cd ~/GridCast/pipeline
+python main.py --promote
+```
+
+The training pipeline should connect through the SSH tunnel and write to MLflow on the VPS.
+
+The exact model version changes between runs.
+
+What matters is that the registered model:
+
+```text
+grid_load_model
+```
+
+has a valid:
+
+```text
+@champion
+```
+
+alias.
+
+## 5.4 Verify the champion model
+
+Run on the **local machine** while the SSH tunnel is still open:
+
+```bash
+cd ~/GridCast
+
+python - <<'PY'
+from mlflow import MlflowClient
+
+client = MlflowClient()
+
+model = client.get_model_version_by_alias(
+    "grid_load_model",
+    "champion",
+)
+
+print("Champion version:", model.version)
+print("Run ID:", model.run_id)
+print("Status:", model.status)
+PY
+```
+
+Expected output is similar to:
+
+```text
+Champion version: 16
+Run ID: <MLFLOW_RUN_ID>
+Status: READY
+```
+
+Do not depend on version `16`.
+
+Future training runs may create version `17`, `18`, or higher.
+
+The important requirement is:
+
+```text
+grid_load_model@champion exists
+```
+
+---
+
+# Step 6 — Start the Full GridCast System on the VPS
+
+Once MLflow is running and `grid_load_model@champion` exists, the serving system can start.
+
+GridCast services are:
+
+```text
+mlflow
+online
+offline
+dashboard
+```
+
+This differs from examples that use service names such as `api` and `batch`.
+
+For GridCast:
+
+```text
+api   -> online
+batch -> offline
+```
+
+## 6.1 Build and start the complete deployment
+
+Run on the **VPS**:
+
+```bash
+cd ~/GridCast/GridCast_deployment
+docker compose up -d --build
+```
+
+Docker Compose should:
+
+```text
+start MLflow
+wait for MLflow health
+start Online
+start Offline
+wait for Online/Offline health
+start Dashboard
+```
+
+Expected output is similar to:
+
+```text
+Container gridcast-mlflow     Healthy
+Container gridcast-online     Healthy
+Container gridcast-offline    Healthy
+Container gridcast-dashboard  Started
+```
+
+## 6.2 Check container status
+
+Run:
+
+```bash
+docker compose ps
+```
+
+Expected:
+
+```text
+gridcast-mlflow      healthy
+gridcast-online      healthy
+gridcast-offline     healthy
+gridcast-dashboard   up
+```
+
+## 6.3 Inspect logs if needed
+
+All services:
+
+```bash
+docker compose logs --tail=100
+```
+
+Online only:
+
+```bash
+docker compose logs --tail=100 online
+```
+
+Offline only:
+
+```bash
+docker compose logs --tail=100 offline
+```
+
+Dashboard only:
+
+```bash
+docker compose logs --tail=100 dashboard
+```
+
+MLflow only:
+
+```bash
+docker compose logs --tail=100 mlflow
+```
+
+A clean restart may show messages such as:
+
+```text
+Application shutdown complete.
+Finished server process.
+exited with code 0
+```
+
+These are normal graceful shutdown messages, not application crashes.
+
+---
+
+# Step 7 — Access the Dashboard
+
+GridCast Dashboard runs on:
+
+```text
+1013
+```
+
+From a browser outside the VPS, open:
+
+```text
+http://<VPS_IP>:1013
+```
+
+Example:
+
+```text
+http://35.202.67.240:1013
+```
+
+This requires port `1013` to be allowed by the VPS firewall or cloud firewall.
+
+If the dashboard opens successfully, external access is working.
+
+The dashboard communicates with the backend services over the internal Docker network:
+
+```text
+Dashboard
+    |
+    +--> http://online:1011
+    |
+    +--> http://offline:1012
+```
+
+It does not use the public VPS IP to communicate with the Online and Offline containers.
+
+---
+
+# Step 8 — End-to-End VPS Testing
+
+After all containers are running, test the complete system from the **VPS**.
+
+Run from:
+
+```bash
+cd ~/GridCast/GridCast_deployment
+```
+
+## 8.1 MLflow health
+
+```bash
+curl -s http://127.0.0.1:1010/health
+```
+
+Expected:
+
+```text
+OK
+```
+
+## 8.2 Online API health
+
+```bash
+curl -s http://127.0.0.1:1011/health
+```
+
+Expected JSON similar to:
+
+```json
+{
+  "status": "ok",
+  "model_version": "v16",
+  "model_alias": "champion"
+}
+```
+
+The exact version can change.
+
+The important values are:
+
+```text
+status = ok
+model_alias = champion
+```
+
+## 8.3 Offline API health
+
+```bash
+curl -s http://127.0.0.1:1012/health
+```
+
+Expected JSON similar to:
+
+```json
+{
+  "status": "ok",
+  "forecasts_stored": 0,
+  "running_jobs": 0,
+  "failed_jobs": 0,
+  "db": "/app/offline/data/batch_results.db",
+  "forecasts_dir": "/app/offline/data/forecasts",
+  "reports_dir": "/app/offline/data/reports"
+}
+```
+
+The number of stored forecasts can be greater than zero after previous runs.
+
+## 8.4 Dashboard reachability
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" \
+  http://127.0.0.1:1013
+```
+
+Expected:
+
+```text
+200
+```
+
+## 8.5 Test a real online prediction
+
+First inspect the Online API schema:
+
+```bash
+curl -s http://127.0.0.1:1011/openapi.json
+```
+
+For the current GridCast request schema, an example prediction request is:
+
+```bash
+curl -s -X POST http://127.0.0.1:1011/predict \
+  -H "Content-Type: application/json" \
+  -d '{
+    "Date": "2025-06-06",
+    "Hr_End": 14,
+    "Dry_Bulb": 75.0,
+    "Dew_Point": 60.0
+  }'
+```
+
+Expected result:
+
+```text
+HTTP success with a GridCast predicted load value in MW
+```
+
+The exact prediction changes with the champion model.
+
+If the request schema changes later, use `/openapi.json` as the source of truth.
+
+## 8.6 Trigger a real offline forecast
+
+Run:
+
+```bash
+curl -s -X POST \
+  "http://127.0.0.1:1012/forecast?origin_date=2025-06-06"
+```
+
+Expected response is similar to:
+
+```json
+{
+  "status": "started",
+  "origin_date": "2025-06-06",
+  "target_date": "2025-06-07",
+  "message": "..."
+}
+```
+
+The forecast runs asynchronously.
+
+## 8.7 Check running jobs
+
+Immediately after triggering:
+
+```bash
+curl -s http://127.0.0.1:1012/running
+```
+
+The job may appear here.
+
+If the forecast completes quickly, this endpoint may already be empty.
+
+That is normal.
+
+## 8.8 Check forecast history
+
+After the forecast completes:
+
+```bash
+curl -s http://127.0.0.1:1012/forecasts
+```
+
+Expected result: at least one forecast record containing values such as:
+
+```text
+origin_date
+target_date
+model_version
+model_run_id
+model_alias
+weather_source
+total_hours
+peak_load_mw
+minimum_load_mw
+average_load_mw
+daily_energy_mwh
+forecast_path
+report_path
+mlflow_tracking_run_id
+```
+
+Important expected values include:
+
+```text
+model_alias = champion
+weather_source = open_meteo_era5
+```
+
+For a normal non-DST day:
+
+```text
+total_hours = 24
+```
+
+## 8.9 Verify persistent forecast files
+
+Run on the VPS:
+
+```bash
+ls -R offline_data
+```
+
+Expected structure:
+
+```text
+offline_data/
+├── batch_results.db
+├── forecasts/
+│   └── gridcast_<target-date>_<forecast-id>.parquet
+└── reports/
+    └── gridcast_<target-date>_<forecast-id>.html
+```
+
+This proves that the Offline container is writing through the Docker bind mount to persistent VPS storage.
+
+## 8.10 Verify the full deployment state
+
+Run:
+
+```bash
+docker compose ps
+```
+
+Expected:
+
+```text
+gridcast-mlflow      healthy
+gridcast-online      healthy
+gridcast-offline     healthy
+gridcast-dashboard   up
+```
+
+At this point the VPS deployment is validated end to end.
+
+---
+
+# Final Validated VPS Architecture
+
+After all tests pass:
+
+```text
+                           VPS
+                            |
+                 +----------+----------+
+                 |                     |
+                 v                     v
+          MLflow :1010          Dashboard :1013
+                 |
+           +-----+-----+
+           |           |
+           v           v
+     Online :1011   Offline :1012
+           |           |
+           +-----+-----+
+                 |
+                 v
+       grid_load_model@champion
+```
+
+Local training reaches MLflow through the SSH tunnel:
+
+```text
+Local training
+      |
+      | MLFLOW_TRACKING_URI
+      v
+127.0.0.1:5010
+      |
+      | SSH tunnel
+      v
+VPS 127.0.0.1:1010
+      |
+      v
+MLflow
+```
+
+The VPS deployment is considered successful when:
+
+```text
+MLflow is healthy
+@champion exists
+Online is healthy
+Offline is healthy
+Dashboard returns HTTP 200
+Online prediction succeeds
+Offline forecast succeeds
+SQLite persistence works
+Parquet output is created
+HTML report is created
+Offline MLflow tracking run is created
+containers restart cleanly
+```
+
+This is the baseline VPS deployment before adding later production infrastructure such as Nginx, TLS, CI/CD, Prometheus, or Grafana.

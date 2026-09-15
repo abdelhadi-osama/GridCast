@@ -1577,7 +1577,7 @@ gridcast-dashboard   up
 
 
 To stop and remove all four GridCast containers cleanly, run::
-
+But I would not do that now. Keep the images and persistent data; just use
 ```bash
 cd ~/GridCast/GridCast_deployment
 
@@ -1594,6 +1594,12 @@ gridcast-mlflow
 gridcast-online
 gridcast-offline
 gridcast-dashboard
+```
+If you also wanted to remove the built Docker images, that would be a different command:
+
+```bash
+docker compose down --rmi local
+
 ```
 ---
 

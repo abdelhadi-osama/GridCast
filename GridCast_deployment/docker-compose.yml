@@ -53,7 +53,7 @@ services:
 
     environment:
       MLFLOW_TRACKING_URI: http://mlflow:1010
-
+      ROOT_PATH: /online
     depends_on:
       mlflow:
         condition: service_healthy
@@ -90,7 +90,7 @@ services:
     environment:
       MLFLOW_TRACKING_URI: http://mlflow:1010
       GRIDCAST_OFFLINE_DATA_DIR: /app/offline/data
-
+      ROOT_PATH: /offline
     volumes:
       - ./offline_data:/app/offline/data
 
