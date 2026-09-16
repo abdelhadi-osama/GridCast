@@ -7,7 +7,7 @@ WORKDIR /app
 COPY evaluator.py .
 COPY metrics.py .
 
-RUN uv pip install --no-cache-dir prometheus-client
+RUN uv pip install --system --no-cache-dir prometheus-client
 
 EXPOSE 8000
 
