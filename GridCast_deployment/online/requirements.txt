@@ -7,3 +7,4 @@ mlflow==3.16.0
 xgboost==3.4.1
 catboost==1.2.10
 holidays==0.103
+prometheus-client

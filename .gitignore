@@ -114,4 +114,5 @@ offline/reports/
 offline/batch_results.db
 
 # ---------- Prefect ----------
-.prefect/
+.prefect/GridCast_deployment/monitoring/evaluator/.env
+GridCast_deployment/.env

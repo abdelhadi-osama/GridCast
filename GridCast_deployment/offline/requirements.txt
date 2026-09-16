@@ -15,3 +15,4 @@ pyarrow==25.0.1
 requests==2.34.2
 holidays==0.103
 numpy==2.5.2
+prometheus-client

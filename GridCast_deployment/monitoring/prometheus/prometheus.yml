@@ -1,0 +1,48 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+
+  # ─────────────────────────────────────────────────────────────
+  # GridCast Model Evaluator
+  # ─────────────────────────────────────────────────────────────
+  - job_name: "gridcast-evaluator"
+    metrics_path: "/metrics"
+    scrape_interval: 15s
+    static_configs:
+      - targets:
+          - "evaluator:8000"
+
+
+  # ─────────────────────────────────────────────────────────────
+  # GridCast Online API
+  # ─────────────────────────────────────────────────────────────
+  - job_name: "gridcast-online"
+    metrics_path: "/metrics"
+    scrape_interval: 15s
+    static_configs:
+      - targets:
+          - "online:1011"
+
+
+  # ─────────────────────────────────────────────────────────────
+  # GridCast Offline API
+  # ─────────────────────────────────────────────────────────────
+  - job_name: "gridcast-offline"
+    metrics_path: "/metrics"
+    scrape_interval: 15s
+    static_configs:
+      - targets:
+          - "offline:1012"
+
+
+  # ─────────────────────────────────────────────────────────────
+  # Prometheus
+  # ─────────────────────────────────────────────────────────────
+  - job_name: "prometheus"
+    metrics_path: "/metrics"
+    scrape_interval: 15s
+    static_configs:
+      - targets:
+          - "localhost:9090"

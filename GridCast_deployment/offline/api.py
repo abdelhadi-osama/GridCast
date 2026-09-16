@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import logging
 import os
-
+import time
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -38,11 +38,20 @@ from fastapi import (
     BackgroundTasks,
     FastAPI,
     HTTPException,
+    Request,
+    Response,
 )
 
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from prometheus_client import (
+    CONTENT_TYPE_LATEST,
+    Counter,
+    Gauge,
+    Histogram,
+    generate_latest,
+)
 
 import core
 
@@ -68,6 +77,38 @@ from persistence import (
 
 logger = logging.getLogger(__name__)
 
+# =============================================================================
+# PROMETHEUS METRICS
+# =============================================================================
+
+HTTP_REQUESTS_TOTAL = Counter(
+    "gridcast_http_requests_total",
+    "Total number of GridCast HTTP requests.",
+    [
+        "service",
+        "method",
+        "endpoint",
+        "status",
+    ],
+)
+
+HTTP_REQUEST_DURATION_SECONDS = Histogram(
+    "gridcast_http_request_duration_seconds",
+    "GridCast HTTP request duration in seconds.",
+    [
+        "service",
+        "method",
+        "endpoint",
+    ],
+)
+
+ACTIVE_REQUESTS = Gauge(
+    "gridcast_active_requests",
+    "Number of active GridCast HTTP requests.",
+    [
+        "service",
+    ],
+)
 
 # =============================================================================
 # SERVER-SIDE WEATHER CONFIGURATION
@@ -133,7 +174,78 @@ app = FastAPI(
      root_path=os.getenv("ROOT_PATH", ""),
 )
 
+# =============================================================================
+# PROMETHEUS HTTP INSTRUMENTATION
+# =============================================================================
 
+@app.middleware("http")
+async def prometheus_middleware(
+    request: Request,
+    call_next,
+):
+    """
+    Track HTTP request count, latency,
+    status code, and active requests.
+    """
+
+    # Do not count Prometheus scraping itself
+    # as normal application traffic.
+    if request.url.path.endswith("/metrics"):
+        return await call_next(request)
+
+    service = "offline"
+    method = request.method
+
+    ACTIVE_REQUESTS.labels(
+        service=service,
+    ).inc()
+
+    start_time = time.perf_counter()
+
+    status_code = 500
+
+    try:
+        response = await call_next(
+            request
+        )
+
+        status_code = response.status_code
+
+        return response
+
+    finally:
+        duration = (
+            time.perf_counter()
+            - start_time
+        )
+
+        route = request.scope.get(
+            "route"
+        )
+
+        if route is not None:
+            endpoint = route.path
+        else:
+            endpoint = "unmatched"
+
+        HTTP_REQUESTS_TOTAL.labels(
+            service=service,
+            method=method,
+            endpoint=endpoint,
+            status=str(status_code),
+        ).inc()
+
+        HTTP_REQUEST_DURATION_SECONDS.labels(
+            service=service,
+            method=method,
+            endpoint=endpoint,
+        ).observe(
+            duration
+        )
+
+        ACTIVE_REQUESTS.labels(
+            service=service,
+        ).dec()
 # =============================================================================
 # HELPERS
 # =============================================================================
@@ -240,7 +352,19 @@ class ForecastTriggerResponse(
 
     message: str
 
+# =============================================================================
+# PROMETHEUS ENDPOINT
+# =============================================================================
 
+@app.get(
+    "/metrics",
+    include_in_schema=False,
+)
+def metrics():
+    return Response(
+        content=generate_latest(),
+        media_type=CONTENT_TYPE_LATEST,
+    )
 # =============================================================================
 # HEALTH
 # =============================================================================
