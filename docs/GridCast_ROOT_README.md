@@ -760,6 +760,67 @@ Each linked README should contain the implementation details and exact commands 
 
 ---
 
+# 📈 Future Improvements
+
+GridCast V1 already includes model, operational, and product monitoring. The next observability improvements can deepen the model-monitoring layer.
+
+## Evidently / Distribution Drift
+
+A future evaluator can compare a trusted reference window with recent production observations.
+
+Candidate drift dimensions:
+
+```text
+Dry_Bulb
+Dew_Point
+selected engineered temporal features
+predicted load distribution
+residual distribution
+```
+
+Possible monitoring outputs:
+
+```text
+dataset drift detected
+number of drifted features
+feature-level drift score
+prediction drift
+residual drift
+```
+
+This should complement—not replace—MAE, RMSE, and MAPE.
+
+> **Data drift and model-performance degradation are different signals.**
+
+A distribution can move without immediately harming model accuracy, and accuracy can degrade without obvious marginal feature drift.
+
+## Persistent Evaluation History
+
+The current evaluator is intentionally lightweight.
+
+A future version can persist:
+
+```text
+forecast_id
+origin_date
+target_date
+model_version
+evaluated_at
+matched_hours
+MAE
+RMSE
+MAPE
+bias
+```
+
+This would support:
+
+```text
+historical backfills
+model-version comparisons
+restart-safe deduplication
+target-date analytics
+```
 
 ## Additional Observability
 
@@ -841,7 +902,7 @@ See [`LICENSE`](LICENSE) for the repository license.
 
 For questions, collaboration, feedback, or technical discussion about GridCast:
 
-**Email:** `abdelhadiosama12@gmail.com`
+**Email:** `YOUR_PUBLIC_EMAIL_HERE`
 
 > Replace the placeholder above with the email address you want to publish publicly.
 
