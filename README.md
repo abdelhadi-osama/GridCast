@@ -843,7 +843,6 @@ For questions, collaboration, feedback, or technical discussion about GridCast:
 
 **Email:** `abdelhadiosama12@gmail.com`
 
-> Replace the placeholder above with the email address you want to publish publicly.
 
 ---
 
