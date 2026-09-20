@@ -2498,3 +2498,26 @@ The containers return to a healthy state
 The public GridCast application remains reachable after deployment
 ```
 
+
+---
+
+# Accessing Grafana
+
+Grafana remains private on the VPS and is accessed with an SSH tunnel.
+
+From the local machine:
+
+```bash
+ssh -N \
+  -L 11015:127.0.0.1:1015 \
+  username@<VPS_IP>
+```
+
+Then browse to:
+
+```text
+http://127.0.0.1:11015
+```
+
+The local port is above 1024 so a normal Linux user can bind it without elevated privileges.
+📘 **Detailed monitoring documentation:** [`GridCast_deployment/monitoring/README.md`](GridCast_deployment/monitoring/README.md)
