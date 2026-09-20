@@ -1,3 +1,7 @@
+
+
+https://github.com/user-attachments/assets/aa40e2de-db91-4dcd-9cd7-25edda7305fd
+
 # ⚡ GridCast
 
 ### Production-Grade Electricity Demand Forecasting for ISO New England
