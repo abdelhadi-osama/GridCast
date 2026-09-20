@@ -1,7 +1,3 @@
-
-
-https://github.com/user-attachments/assets/aa40e2de-db91-4dcd-9cd7-25edda7305fd
-
 # ⚡ GridCast
 
 ### Production-Grade Electricity Demand Forecasting for ISO New England
@@ -19,6 +15,10 @@ https://github.com/user-attachments/assets/aa40e2de-db91-4dcd-9cd7-25edda7305fd
   <strong>Train → Register → Serve → Forecast → Monitor → Evaluate</strong>
 </p>
 
+
+https://github.com/user-attachments/assets/118f1c36-516a-491d-88f7-56d8cf0ad2c7
+
+https://github.com/user-attachments/assets/aa40e2de-db91-4dcd-9cd7-25edda7305fd
 ---
 
 ## 🎯 What is GridCast?
